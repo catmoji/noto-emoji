@@ -16,14 +16,14 @@ EMOJI = NotoColorEmoji
 EMOJI_WINDOWS = NotoColorEmoji_WindowsCompatible
 all: $(EMOJI).ttf $(EMOJI_WINDOWS).ttf
 
-CFLAGS = -std=c99 -Wall -Wextra `pkg-config --cflags --libs cairo`
+CFLAGS = $(OPT_CFLAGS) `pkg-config --cflags --libs cairo`
 LDFLAGS = -lm `pkg-config --libs cairo`
 
 PNGQUANT = pngquant
 PYTHON = python3
 PNGQUANTFLAGS = --speed 1 --skip-if-larger --quality 85-95 --force
 BODY_DIMENSIONS = 136x128
-IMOPS := -size $(BODY_DIMENSIONS) canvas:none -compose copy -gravity center
+IMOPS := -size $(BODY_DIMENSIONS) -background none -gravity center -extent $(BODY_DIMENSIONS) -compose copy
 
 ZOPFLIPNG = zopflipng
 TTX = ttx
@@ -81,6 +81,12 @@ SELECTED_FLAGS = AC AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ \
 	ZA ZM ZW \
         GB-ENG GB-SCT GB-WLS
 
+ifeq (,$(shell which $(PNGQUANT)))
+  ifeq (,$(wildcard $(PNGQUANT)))
+    MISSING_PNGQUANT = fail
+  endif
+endif
+
 ifeq (,$(shell which $(ZOPFLIPNG)))
   ifeq (,$(wildcard $(ZOPFLIPNG)))
     MISSING_ZOPFLI = fail
@@ -100,7 +106,7 @@ endif
 
 ALL_FLAGS = $(basename $(notdir $(wildcard $(FLAGS_SRC_DIR)/*.png)))
 
-FLAGS = $(SELECTED_FLAGS)
+FLAGS = $(ALL_FLAGS)
 
 FLAG_NAMES = $(FLAGS:%=%.png)
 FLAG_FILES = $(addprefix $(FLAGS_DIR)/, $(FLAG_NAMES))
@@ -145,10 +151,15 @@ endif
 ifdef MISSING_PY_TOOLS
 		$(error "Missing tools; run: "'pip install -r requirements.txt' in your virtual environment")
 endif
+ifdef MISSING_PNGQUANT
+	$(error "$(PNGQUANT) is not available")
+endif
 
 $(EMOJI_DIR) $(FLAGS_DIR) $(RESIZED_FLAGS_DIR) $(RENAMED_FLAGS_DIR) $(QUANTIZED_DIR) $(COMPRESSED_DIR):
 	mkdir -p "$@"
 
+
+$(PNGQUANT): check_quantization_tool
 
 waveflag: waveflag.c
 	$(CC) $< -o $@ $(CFLAGS) $(LDFLAGS)
@@ -164,13 +175,13 @@ waveflag: waveflag.c
 # imagemagick packaged with ubuntu trusty (6.7.7-10) by using -composite.
 
 $(EMOJI_DIR)/%.png: $(EMOJI_SRC_DIR)/%.png | $(EMOJI_DIR)
-	@convert $(IMOPS) "$<" -composite "PNG32:$@"
+	@gm convert $(IMOPS) "$<" "PNG32:$@"
 
 $(FLAGS_DIR)/%.png: $(FLAGS_SRC_DIR)/%.png ./waveflag | $(FLAGS_DIR)
 	@./waveflag $(FLAGS_DIR)/ "$<"
 
 $(RESIZED_FLAGS_DIR)/%.png: $(FLAGS_DIR)/%.png | $(RESIZED_FLAGS_DIR)
-	@convert $(IMOPS) "$<" -composite "PNG32:$@"
+	@gm convert $(IMOPS) "$<" "PNG32:$@"
 
 flag-symlinks: $(RESIZED_FLAG_FILES) | $(RENAMED_FLAGS_DIR)
 	@$(subst ^, ,                                  \
